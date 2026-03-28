@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "MCP server for AI-powered meeting notes, transcription, and automation",
   "main": "dist/index.js",
+  "bin": {
+    "meet-agent": "./dist/cli.js"
+  },
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "NODE_OPTIONS='--max-old-space-size=8192' tsc --noEmit",
@@ -12,10 +15,10 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "commander": "^14.0.3",
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
     "googleapis": "^144.0.0",
-    "open": "^10.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

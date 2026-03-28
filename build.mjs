@@ -1,19 +1,17 @@
 import { build } from "esbuild";
 
-await build({
-  entryPoints: ["src/index.ts"],
+const shared = {
   bundle: true,
   platform: "node",
   target: "node18",
-  outfile: "dist/index.js",
   format: "cjs",
   sourcemap: true,
-  external: [
-    // Keep native modules and large packages external
-    "patchright",
-    "puppeteer",
-    "ffmpeg-static",
-  ],
-});
+  external: ["patchright", "puppeteer", "ffmpeg-static"],
+};
 
-console.log("Build complete → dist/index.js");
+await Promise.all([
+  build({ ...shared, entryPoints: ["src/index.ts"], outfile: "dist/index.js" }),
+  build({ ...shared, entryPoints: ["src/cli.ts"], outfile: "dist/cli.js" }),
+]);
+
+console.log("Build complete → dist/index.js, dist/cli.js");

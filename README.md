@@ -1,217 +1,271 @@
 # Meet Agent MCP
 
-An MCP server that gives your AI coding agent (Claude Code, Cursor, etc.) full meeting superpowers — join meetings, transcribe with speaker identification, record, and auto-send AI-generated notes.
+An MCP server that connects to your AI coding agent (Claude Code, Cursor, etc.) and gives it full meeting automation — join Google Meets, transcribe with speaker identification, record, and email AI-generated notes to attendees.
 
-Connect it once, and your agent handles everything a paid AI notetaker would, using whatever AI you've plugged it into.
+The AI agent (Claude) handles summarization and note-taking using its own intelligence. This server handles the infrastructure: browser bot, audio capture, transcription API, Google integrations.
 
 ---
 
-## What it does
+## Current status
 
-| Capability | Status |
+| Feature | Status |
 |---|---|
-| Google OAuth (Gmail + Calendar + Drive) | Done |
-| Join Google Meet via headless browser (Patchright) | Phase 2 |
+| Google OAuth — Gmail, Calendar, Drive | **Done** |
+| CLI — `meet-agent login/status/logout` | **Done** |
+| MCP server — agent tool registration | **Done** |
+| Join Google Meet (Patchright headless browser) | Phase 2 |
 | Real-time transcription with speaker diarization (Deepgram) | Phase 2 |
 | Record meeting audio/video | Phase 2 |
 | Upload recording to Google Drive | Phase 2 |
-| AI-generated notes + summary | Phase 2 |
 | Email notes via Gmail | Phase 2 |
 | Auto-join from Google Calendar | Phase 3 |
-| Support for Zoom / Teams | Phase 3 |
+| Zoom / Teams support | Phase 3 |
 
 ---
 
-## Setup
+## Prerequisites
 
-### 1. Install
+Before starting, make sure you have the following installed:
+
+### 1. Node.js (v18 or higher)
 
 ```bash
-git clone <repo>
-cd meet-agent
-npm install
-npm run build
+node --version   # must be v18+
 ```
 
-### 2. Configure credentials
+If not installed, download from [nodejs.org](https://nodejs.org) or use a version manager:
 
-Copy `.env.example` to `.env`:
+```bash
+# macOS with Homebrew
+brew install node
+```
+
+### 2. A Google Cloud project with OAuth credentials
+
+This is required for Gmail, Calendar, and Drive access.
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. Click **Select a project** → **New Project** → give it any name → **Create**
+3. Go to **APIs & Services** → **Enable APIs and Services** → search for and enable each of these three:
+   - **Gmail API**
+   - **Google Calendar API**
+   - **Google Drive API**
+4. Go to **APIs & Services** → **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
+5. If prompted to configure a consent screen first: choose **External**, fill in your app name and email, save. You can skip optional fields.
+6. For application type, select **Desktop App** → give it a name → **Create**
+7. Copy the **Client ID** and **Client Secret** shown — you'll need these in the next step
+
+> **Note:** You do not need to add any redirect URIs for Desktop App type. Google automatically allows `http://localhost` on any port, which is how the login flow works.
+
+### 3. A Deepgram account (for Phase 2 transcription)
+
+Not needed until Phase 2. When ready, sign up at [deepgram.com](https://deepgram.com) and get a free API key.
+
+---
+
+## Installation
+
+### Step 1 — Clone and install dependencies
+
+```bash
+git clone <repo-url>
+cd Meet_Agent
+npm install
+```
+
+### Step 2 — Configure environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in `.env`:
+Open `.env` and fill in your credentials:
 
 ```env
-# Required for Google login
-GOOGLE_CLIENT_ID=your_client_id
-GOOGLE_CLIENT_SECRET=your_client_secret
+GOOGLE_CLIENT_ID=your_client_id_here
+GOOGLE_CLIENT_SECRET=your_client_secret_here
 
-# Required for transcription (get free key at deepgram.com)
-DEEPGRAM_API_KEY=your_deepgram_key
+# Leave these as-is unless you need to change them
+OAUTH_CALLBACK_PORT=3847
+
+# Not needed until Phase 2
+DEEPGRAM_API_KEY=your_deepgram_key_here
 ```
 
-> **Getting Google credentials (one-time, 5 min):**
-> 1. Go to [console.cloud.google.com](https://console.cloud.google.com) → New project
-> 2. APIs & Services → Enable: Gmail API, Google Calendar API, Google Drive API
-> 3. Credentials → Create → OAuth 2.0 Client ID → type: **Desktop App**
-> 4. Add redirect URI: `http://localhost:3847/oauth/callback`
-> 5. Copy Client ID and Secret into `.env`
->
-> On first login you'll see "This app isn't verified" — click **Advanced → Continue**. This is normal for self-hosted OAuth apps. You're authenticating with your own credentials.
-
-### 3. Connect to Claude Code
+### Step 3 — Build the project
 
 ```bash
-claude mcp add meet-agent -- node /path/to/meet-agent/dist/index.js
+npm run build
 ```
 
-Or add to your Claude Code `settings.json`:
+This compiles both:
+- `dist/index.js` — the MCP server (used by Claude Code)
+- `dist/cli.js` — the CLI (used by you directly in the terminal)
 
-```json
-{
-  "mcpServers": {
-    "meet-agent": {
-      "command": "node",
-      "args": ["/path/to/meet-agent/dist/index.js"]
-    }
-  }
-}
+### Step 4 — Install the CLI globally
+
+This makes the `meet-agent` command available in your terminal from any directory.
+
+Check if `~/.local/bin` is in your PATH:
+
+```bash
+echo $PATH | grep -o '.local/bin'
 ```
 
-### 4. Login
+If it prints `.local/bin`, run:
 
-In Claude Code, run:
-
+```bash
+mkdir -p ~/.local/bin
+cat > ~/.local/bin/meet-agent << 'EOF'
+#!/bin/sh
+exec node /path/to/Meet_Agent/dist/cli.js "$@"
+EOF
+chmod +x ~/.local/bin/meet-agent
 ```
-login
+
+Replace `/path/to/Meet_Agent` with the actual absolute path to where you cloned the repo.
+
+If `~/.local/bin` is **not** in your PATH, add it by appending to your shell config:
+
+```bash
+# for zsh (default on macOS)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
 ```
 
-A browser window opens. Sign in with your Google account. Done — your agent now has access to your Gmail, Calendar, and Drive.
+Verify it works:
+
+```bash
+meet-agent --help
+```
+
+### Step 5 — Login with Google
+
+```bash
+meet-agent login
+```
+
+This will:
+1. Start a local server on port 3847 to receive the OAuth callback
+2. Open your browser to Google's authorization page
+3. Ask you to sign in and grant permissions (Gmail, Calendar, Drive)
+4. Save your tokens to `~/.config/meet-agent/tokens.json` with restricted permissions
+
+If the browser doesn't open automatically, copy the URL printed in the terminal and open it manually.
+
+On the consent screen you may see **"This app isn't verified"** — click **Advanced** → **Continue**. This is expected for self-hosted OAuth apps authenticating with your own credentials.
+
+Verify the login worked:
+
+```bash
+meet-agent status
+```
+
+You should see your email and `Connectivity: Connected`.
+
+### Step 6 — Register the MCP server with Claude Code
+
+```bash
+claude mcp add meet-agent --scope user -- node /path/to/Meet_Agent/dist/index.js
+```
+
+The `--scope user` flag makes it available in all your projects, not just this directory.
+
+Then **restart Claude Code** completely. The MCP server is launched automatically by Claude Code on startup — you do not run it manually.
+
+Verify it's registered:
+
+```bash
+claude mcp list
+```
+
+You should see `meet-agent` listed.
 
 ---
 
-## Tools
+## CLI reference
+
+Auth and server management are done through the CLI, not through the AI agent.
+
+```bash
+meet-agent login     # Connect your Google account via browser OAuth
+meet-agent status    # Show login state, token expiry, live connectivity check
+meet-agent logout    # Delete stored credentials
+meet-agent --help    # List all commands
+```
+
+You only need to run `login` once. Tokens are stored locally and auto-refresh — you won't need to log in again unless you explicitly log out or revoke access in your Google account settings.
+
+---
+
+## MCP tools reference
+
+These are available to your AI agent (e.g. Claude Code) once the MCP server is registered.
 
 ### Available now
 
-#### `login`
-Connect your Google account. Opens a browser OAuth flow and saves tokens locally.
+| Tool | Description |
+|---|---|
+| `auth_status` | Check if Meet Agent is connected, show email and scopes |
+| `login` | OAuth login (prefer the CLI version instead) |
+| `logout` | Delete credentials (prefer the CLI version instead) |
 
-```
-No parameters required.
-```
+### Available in Phase 2
 
-Grants access to: Gmail (send/read), Google Calendar (read), Google Drive (upload files).
-
-Tokens are stored at `~/.config/meet-agent/tokens.json` with restricted file permissions (owner read/write only).
-
----
-
-#### `auth_status`
-Check if you're logged in and what permissions are active.
-
-```
-No parameters required.
-```
-
-Returns your logged-in email, token validity, auto-refresh status, and a live connectivity check against the Gmail API.
+| Tool | Parameters | Description |
+|---|---|---|
+| `join_meeting` | `url` (string), `record` (bool, default false) | Join a Google Meet as a bot using your account |
+| `get_transcript` | `meeting_id` (string) | Get full transcript with speaker labels and timestamps |
+| `list_meetings` | `hours_ahead` (number, default 24) | List upcoming calendar events with Meet links |
+| `send_notes` | `meeting_id`, `recipients` (string[]), `include_recording` (bool) | Email notes via Gmail |
 
 ---
 
-#### `logout`
-Disconnect your Google account and delete stored credentials.
+## How it works end-to-end (Phase 2 preview)
 
 ```
-No parameters required.
+You: "Join my 3pm standup and send notes to the team"
+
+Claude:
+  1. calls list_meetings        → finds the Meet URL and attendee emails
+  2. calls join_meeting(url)    → bot joins the call using your Google account
+     [meeting runs, audio is streamed to Deepgram in real-time]
+  3. calls get_transcript()     → gets timestamped transcript with speaker labels:
+                                   [00:01:12] Speaker 0 (Arjun): ...
+                                   [00:01:18] Speaker 1 (Priya): ...
+  4. Claude summarizes the transcript, extracts action items and decisions
+  5. calls send_notes()         → emails the notes via Gmail to all attendees
 ```
+
+The AI does the thinking. The MCP server handles the plumbing.
 
 ---
 
-### Coming in Phase 2
-
-#### `join_meeting`
-Join a Google Meet. The bot joins using your authenticated Google account (no "Guest" label).
+## Project structure
 
 ```
-url           string   Google Meet URL (e.g. https://meet.google.com/abc-defg-hij)
-record        bool     Record the meeting. Default: false
+Meet_Agent/
+├── src/
+│   ├── index.ts                  MCP server — registers all tools, runs on stdio
+│   ├── cli.ts                    CLI entry point — login/status/logout commands
+│   ├── config.ts                 Loads .env, validates required credentials
+│   ├── tools/
+│   │   └── auth.ts               Shared handlers for login, auth_status, logout
+│   └── services/google/
+│       ├── oauth.ts              OAuth 2.0 flow, token storage, auto-refresh
+│       ├── gmail.ts              Gmail API client — send emails
+│       ├── calendar.ts           Calendar API client — read events
+│       └── drive.ts              Drive API client — upload files
+├── dist/                         Built output (generated by npm run build)
+│   ├── index.js                  MCP server binary
+│   └── cli.js                    CLI binary
+├── build.mjs                     esbuild config — builds both targets simultaneously
+├── .env                          Your credentials (gitignored)
+├── .env.example                  Template for .env
+└── package.json
 ```
 
----
-
-#### `get_transcript`
-Get the full transcript with speaker labels and timestamps.
-
-```
-meeting_id    string   ID returned by join_meeting
-```
-
-Returns structured transcript:
-```
-[00:00:12] Speaker 0 (Arjun): Let's start with the roadmap...
-[00:00:18] Speaker 1 (Priya): I think we should prioritize the API first...
-```
-
----
-
-#### `list_meetings`
-Show upcoming Google Calendar events that have a Meet link.
-
-```
-hours_ahead   number   How far ahead to look. Default: 24
-```
-
----
-
-#### `send_notes`
-Email AI-generated meeting notes via Gmail.
-
-```
-meeting_id         string     ID returned by join_meeting
-recipients         string[]   Email addresses. Defaults to calendar attendees
-include_recording  bool       Attach a Google Drive recording link. Default: false
-```
-
----
-
-## Typical usage flow (Phase 2)
-
-```
-You: "Join my 3pm standup and take notes"
-
-Agent:
-  → calls list_meetings to find the Meet link
-  → calls join_meeting(url, record=false)
-  → [meeting happens, bot transcribes in real-time]
-  → calls get_transcript(meeting_id)
-  → summarizes the transcript using its own intelligence
-  → calls send_notes(meeting_id, recipients=[...])
-```
-
-The agent does the AI work (summarization, action items, decisions) using its own model. The MCP server handles the infrastructure (browser bot, audio capture, transcription API, email delivery).
-
----
-
-## Architecture
-
-```
-src/
-├── index.ts                  MCP server entry, tool registration
-├── config.ts                 Env var loading and validation
-├── tools/
-│   └── auth.ts               login / auth_status / logout tool handlers
-└── services/google/
-    ├── oauth.ts              OAuth 2.0 flow + token storage + auto-refresh
-    ├── gmail.ts              Gmail send client
-    ├── calendar.ts           Calendar events client
-    └── drive.ts              Drive file upload client
-```
-
-**Build:** Uses `esbuild` instead of `tsc` — `googleapis` types are too large for the default TypeScript compiler heap. Run `npm run typecheck` separately if you want type validation.
-
-**Token storage:** `~/.config/meet-agent/tokens.json`, permissions `0600`. Tokens auto-refresh via the googleapis client library.
+**Why esbuild instead of tsc?** The `googleapis` package has enormous TypeScript type declarations that exceed the default Node.js heap when running `tsc`. `esbuild` transpiles without type checking and builds in under a second. Run `npm run typecheck` separately if you want full type validation.
 
 ---
 
@@ -219,17 +273,19 @@ src/
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `GOOGLE_CLIENT_ID` | Yes | — | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Yes | — | Google OAuth client secret |
-| `OAUTH_CALLBACK_PORT` | No | `3847` | Local port for OAuth callback |
-| `TOKEN_STORAGE_PATH` | No | `~/.config/meet-agent/tokens.json` | Where to store OAuth tokens |
-| `DEEPGRAM_API_KEY` | Phase 2 | — | Deepgram API key for transcription |
+| `GOOGLE_CLIENT_ID` | Yes | — | From Google Cloud Console OAuth credentials |
+| `GOOGLE_CLIENT_SECRET` | Yes | — | From Google Cloud Console OAuth credentials |
+| `OAUTH_CALLBACK_PORT` | No | `3847` | Local port used during the login OAuth callback |
+| `TOKEN_STORAGE_PATH` | No | `~/.config/meet-agent/tokens.json` | Where credentials are saved after login |
+| `DEEPGRAM_API_KEY` | Phase 2 | — | Deepgram API key for transcription and diarization |
 
 ---
 
-## Security notes
+## Security
 
-- Tokens stored locally with restricted permissions — never sent to any third-party server
-- OAuth scopes are minimal: send-only Gmail, read-only Calendar, file-scoped Drive
-- Patchright browser runs headless, joins meeting as your authenticated user (not a guest bot)
-- Recording is opt-in per meeting (`record: true` flag)
+- Credentials are stored at `~/.config/meet-agent/tokens.json` with `0600` permissions (only your user can read them)
+- Tokens never leave your machine — no third-party relay server
+- OAuth scopes requested are minimal: Gmail send+read, Calendar read-only, Drive file-scoped upload
+- The MCP server communicates with Claude Code via stdio (local process) — no network port is opened
+- The Patchright browser bot (Phase 2) joins meetings as your authenticated Google user, not as an anonymous guest
+- Recording is explicitly opt-in per meeting via the `record: true` flag
