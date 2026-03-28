@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "meet-agent": {
+      "command": "node",
+      "args": ["/Users/vermarjun/Desktop/Meet_Agent/dist/index.js"],
+      "env": {
+        "GOOGLE_CLIENT_ID": "${GOOGLE_CLIENT_ID}",
+        "GOOGLE_CLIENT_SECRET": "${GOOGLE_CLIENT_SECRET}",
+        "OAUTH_CALLBACK_PORT": "3847"
+      }
+    }
+  }
+}
